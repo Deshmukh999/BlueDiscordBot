@@ -25,7 +25,7 @@ intents.message_content = True
 intents.presences = True
 intents.members = True
 intents.voice_states = True 
-
+#Update
 bot = commands.Bot(
     command_prefix="!",
     intents=intents
