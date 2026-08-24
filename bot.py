@@ -150,7 +150,13 @@ YTDL_OPTIONS = {
     "noplaylist": True,
     "quiet": True,
     "no_warnings": True,
-    "cookiefile": os.path.join(BASE_DIR, "cookies.txt") if os.path.exists(os.path.join(BASE_DIR, "cookies.txt")) else None,
+    # REMOVED: cookiefile / cookiesfrombrowser 
+    # ADDED: Forces yt-dlp to bypass broken web player handshakes
+    "extractor_args": {
+        "youtube": {
+            "player_client": ["android", "ios"]
+        }
+    }
 }
 
 BLUE_URL = "https://www.youtube.com/watch?v=68ugkg9RePc"
