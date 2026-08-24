@@ -5,6 +5,8 @@ import random
 import asyncio
 import yt_dlp
 from dotenv import load_dotenv
+import static_ffmpeg
+static_ffmpeg.add_paths()
 
 load_dotenv()
 
