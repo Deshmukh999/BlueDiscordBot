@@ -150,8 +150,7 @@ YTDL_OPTIONS = {
     "noplaylist": True,
     "quiet": True,
     "no_warnings": True,
-    "cookiesfrombrowser": ("chrome",), 
-    
+    "cookiefile": os.path.join(BASE_DIR, "cookies.txt") if os.path.exists(os.path.join(BASE_DIR, "cookies.txt")) else None,
 }
 
 BLUE_URL = "https://www.youtube.com/watch?v=68ugkg9RePc"
