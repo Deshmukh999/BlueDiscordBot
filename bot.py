@@ -450,10 +450,10 @@ async def playblue(interaction: discord.Interaction):
         print("Audio URL obtained.")
 
         source = discord.FFmpegPCMAudio(
-            audio_url,
-            **FFMPEG_OPTIONS
+            audio_url, 
+            executable="ffmpeg",
+            **FFMPEG_OPTIONS"
         )
-
         def after_playing(error):
             if error:
                 print("Playback error:", error)
