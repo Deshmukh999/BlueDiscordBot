@@ -409,77 +409,56 @@ async def on_message(message):
     await bot.process_commands(message)
 
 @bot.tree.command(
-    name="playblue",
-    description="Play Blue in your voice channel"
+    name="playblue", 
+    description="Play Blue"
 )
 async def playblue(interaction: discord.Interaction):
-
     if interaction.user.voice is None:
-        await interaction.response.send_message(
-            "🔵 Join a voice channel first!"
-        )
+        await interaction.response.send_message("🔵 Join a voice channel first!", ephemeral=True)
         return
 
     await interaction.response.defer()
-
     channel = interaction.user.voice.channel
+    
+    # Path to your local mp4 file
+    BLUE_MP4 = os.path.join(BASE_DIR, "blue.mp4")
+    
+    if not os.path.exists(BLUE_MP4):
+        await interaction.followup.send("❌ Error: `blue.mp4` file is missing from the server directory.")
+        return
 
     try:
-
-        # Get or create voice connection
         voice_client = interaction.guild.voice_client
-
         if voice_client is None:
             voice_client = await channel.connect()
-
         elif voice_client.channel != channel:
             await voice_client.move_to(channel)
 
-        # Stop existing audio
         if voice_client.is_playing():
             voice_client.stop()
 
-        print("Getting audio URL...")
-
-        # yt-dlp can take a little while
-        audio_url = await asyncio.to_thread(
-            get_audio_url,
-            BLUE_URL
-        )
-
-        print("Audio URL obtained.")
-
+        # FFmpeg reads the MP4 and streams the audio smoothly
         source = discord.FFmpegPCMAudio(
-            audio_url, 
-            executable="ffmpeg",
-            **FFMPEG_OPTIONS
+            BLUE_MP4, 
+            executable="ffmpeg"
         )
+        
         def after_playing(error):
             if error:
                 print("Playback error:", error)
-            else:
-                print("Playback finished.")
 
-        voice_client.play(
-            source,
-            after=after_playing
-        )
-
-        await interaction.followup.send(
-            "💙 **BLUE DA BA DEE!** 🎵\n"
-            f"Playing in **{channel.name}**!"
-        )
-
+        voice_client.play(source, after=after_playing)
+        await interaction.followup.send(f"💙 **BLUE DA BA DEE!** 🎵\nPlaying smoothly from media storage in **{channel.name}**!")
+        
     except Exception as e:
+        import traceback
+        print("=== RAILWAY VOICE DEBUG START ===")
+        traceback.print_exc()
+        print("=== RAILWAY VOICE DEBUG END ===")
+        
+        error_message = str(e).strip() or "Internal voice initialization error. Check your Railway console logs."
+        await interaction.followup.send(f"❌ Music failed:\n`{error_message}`")
 
-        print("================================")
-        print("MUSIC ERROR")
-        print(e)
-        print("================================")
-
-        await interaction.followup.send(
-            f"❌ Music failed:\n`{e}`"
-        )
 
 @bot.tree.command(
     name="stop",
