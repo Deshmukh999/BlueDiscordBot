@@ -149,6 +149,8 @@ YTDL_OPTIONS = {
     "noplaylist": True,
     "quiet": True,
     "no_warnings": True,
+    "cookiesfrombrowser": ("chrome",), 
+    
 }
 
 BLUE_URL = "https://www.youtube.com/watch?v=68ugkg9RePc"
