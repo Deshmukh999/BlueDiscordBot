@@ -215,32 +215,32 @@ async def playblue(interaction: discord.Interaction):
         await interaction.followup.send("❌ Error: `blue.mp4` asset file was not found inside the root server directory.")
         return
 
-    try:
-        voice_client = interaction.guild.voice_client
-        if voice_client is None:
-            voice_client = await channel.connect()
-        elif voice_client.channel != channel:
-            await voice_client.move_to(channel)
+        try:
+            voice_client = interaction.guild.voice_client
+            if voice_client is None:
+                voice_client = await channel.connect()
+            elif voice_client.channel != channel:
+                await voice_client.move_to(channel)
+    
+            if voice_client.is_playing():
+                voice_client.stop()
+    
+            # FIXED: Uses the correct official static-ffmpeg API function to get the path string
+            from static_ffmpeg import run
+            ffmpeg_bin_path, _ = run.get_or_fetch_platform_executables_else_raise()
+    
+            source = discord.FFmpegPCMAudio(
+                BLUE_MP4, 
+                executable=ffmpeg_bin_path
+            )
+            
+            def after_playing(error):
+                if error:
+                    print("Playback error encountered:", error)
+    
+            voice_client.play(source, after=after_playing)
+            await interaction.followup.send(f"💙 **BLUE DA BA DEE!** 🎵\nPlaying smoothly in **{channel.name}**!")
 
-        if voice_client.is_playing():
-            voice_client.stop()
-
-        # FIX: static-ffmpeg returns paths within an array/list. 
-        # We index [0] to extract the clean, single-string absolute path to avoid crashing discord.py.
-        raw_paths = static_ffmpeg.run.get_command_paths("ffmpeg")
-        ffmpeg_bin_path = raw_paths[0] if isinstance(raw_paths, list) else raw_paths
-
-        source = discord.FFmpegPCMAudio(
-            BLUE_MP4, 
-            executable=ffmpeg_bin_path
-        )
-        
-        def after_playing(error):
-            if error:
-                print("Playback error encountered:", error)
-
-        voice_client.play(source, after=after_playing)
-        await interaction.followup.send(f"💙 **BLUE DA BA DEE!** 🎵\nPlaying smoothly in **{channel.name}**!")
     except Exception as e:
         import traceback
         print("=== RAILWAY VOICE DEBUG START ===")
