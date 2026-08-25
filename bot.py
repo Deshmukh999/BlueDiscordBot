@@ -2,6 +2,8 @@ import discord
 from discord.ext import commands
 import os
 import random
+import asyncio
+import yt_dlp
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -133,8 +135,6 @@ ABHINAV_TRIGGERS = [
     "cutie abhinav",
 ]
 
-BLUE_AUDIO = os.path.join(BASE_DIR, "blue.mp4") 
-
 FFMPEG_OPTIONS = {
     "before_options": (
         "-reconnect 1 "
@@ -143,6 +143,25 @@ FFMPEG_OPTIONS = {
     ),
     "options": "-vn"
 }
+
+YTDL_OPTIONS = {
+    "format": "bestaudio/best",
+    "noplaylist": True,
+    "quiet": True,
+    "no_warnings": True,
+    "cookiefile": os.path.join(BASE_DIR, "cookies.txt") if os.path.exists(os.path.join(BASE_DIR, "cookies.txt")) else None,
+}
+
+BLUE_URL = "https://www.youtube.com/watch?v=68ugkg9RePc"
+
+def get_audio_url(url):
+    with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
+        info = ydl.extract_info(url, download=False)
+
+        if "entries" in info:
+            info = info["entries"][0]
+
+        return info["url"]
 
 @bot.event
 async def on_ready():
@@ -392,18 +411,13 @@ async def playblue(interaction: discord.Interaction):
         )
         return
 
-    if not os.path.exists(BLUE_AUDIO):
-        await interaction.response.send_message(
-            f"❌ Couldn't find `{os.path.basename(BLUE_AUDIO)}` next to the bot script."
-        )
-        return
-
     await interaction.response.defer()
 
     channel = interaction.user.voice.channel
 
     try:
 
+        # Get or create voice connection
         voice_client = interaction.guild.voice_client
 
         if voice_client is None:
@@ -412,11 +426,22 @@ async def playblue(interaction: discord.Interaction):
         elif voice_client.channel != channel:
             await voice_client.move_to(channel)
 
+        # Stop existing audio
         if voice_client.is_playing():
             voice_client.stop()
 
+        print("Getting audio URL...")
+
+        # yt-dlp can take a little while
+        audio_url = await asyncio.to_thread(
+            get_audio_url,
+            BLUE_URL
+        )
+
+        print("Audio URL obtained.")
+
         source = discord.FFmpegPCMAudio(
-            BLUE_AUDIO,
+            audio_url,
             **FFMPEG_OPTIONS
         )
 
@@ -446,6 +471,7 @@ async def playblue(interaction: discord.Interaction):
         await interaction.followup.send(
             f"❌ Music failed:\n`{e}`"
         )
+
 @bot.tree.command(
     name="stop",
     description="Stop the current music"
