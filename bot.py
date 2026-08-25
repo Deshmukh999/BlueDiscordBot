@@ -221,7 +221,7 @@ async def on_presence_update(before, after):
         # Find the general channel
         channel = discord.utils.get(
             after.guild.text_channels,
-            name="general"
+            name="📑general"
         )
 
         if channel is None:
