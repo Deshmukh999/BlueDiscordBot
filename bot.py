@@ -1,8 +1,11 @@
 import discord
 from discord.ext import commands
 import os
+import re
 import random
 import asyncio
+import unicodedata
+from difflib import SequenceMatcher
 import yt_dlp
 from dotenv import load_dotenv
 
@@ -31,75 +34,129 @@ bot = commands.Bot(
 )
 
 
-# ==========================================
-# BLUE TRIGGERS
-# ==========================================
+def normalize_text(text: str) -> str:
+    """Lowercase, strip accents, remove punctuation, collapse repeated chars."""
+    text = text.lower().strip()
 
-BLUE_TRIGGERS = [
-    # Basic
-    "blue",
-    "bluu",
-    "blu",
-    "bluee",
-    "blueee",
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(c for c in text if not unicodedata.combining(c))
 
-    # Song / lyrics
-    "da ba dee",
-    "dabadee",
-    "da ba dee da ba die",
-    "dabadie",
-    "da ba di",
-    "da ba dee da ba di",
-    "blue da ba dee",
-    "blue dabadee",
-    "blue dabadi",
-    "im blue",
-    "i'm blue",
-    "i am blue",
-    "i'm blue dabadee",
-    "i am blue dabadee",
+    text = re.sub(r"[^\w\s]", " ", text, flags=re.UNICODE)
 
-    # Common references
-    "blue song",
-    "blue music",
-    "blue guy",
-    "blue dude",
-    "blue man",
-    "blue person",
-    "blue boy",
-    "blue character",
-    "blue eiffel",
-    "eiffel 65",
-    "eiffel sixty five",
-    "eiffel65",
+    text = re.sub(r"(.)\1{2,}", r"\1\1", text)
 
-    # Meme-style
-    "who is blue",
-    "why is he blue",
-    "why is bro blue",
-    "why is bro so blue",
-    "bro is blue",
-    "bro blue",
-    "he is blue",
-    "he's blue",
-    "hes blue",
-    "they're blue",
-    "they are blue",
-    "everyone is blue",
-    "everything is blue",
+    text = re.sub(r"\s+", " ", text).strip()
+
+    return text
+
+
+def fuzzy_match(word: str, keyword: str, threshold: float = 0.82) -> bool:
+    """True if word is similar enough to keyword to count as a match."""
+    if not word or not keyword:
+        return False
+    return SequenceMatcher(None, word, keyword).ratio() >= threshold
+
+
+def contains_fuzzy_keyword(text: str, keywords: list, threshold: float = 0.82) -> bool:
+    """
+    Checks normalized text for:
+      - fuzzy single-word matches against keywords longer than 3 chars
+      - EXACT token matches for short keywords (<=3 chars) to avoid noise
+      - substring / sliding-window fuzzy matches for multi-word phrases
+    """
+    norm = normalize_text(text)
+    if not norm:
+        return False
+
+    tokens = norm.split()
+    token_set = set(tokens)
+
+    for raw_keyword in keywords:
+        keyword = normalize_text(raw_keyword)
+        if not keyword:
+            continue
+
+        if " " in keyword:
+            if keyword in norm:
+                return True
+
+            kw_tokens = keyword.split()
+            n = len(kw_tokens)
+            if len(tokens) >= n:
+                for i in range(len(tokens) - n + 1):
+                    window = " ".join(tokens[i:i + n])
+                    if fuzzy_match(window, keyword, threshold=0.85):
+                        return True
+
+        else:
+            if len(keyword) <= 3:
+                if keyword in token_set:
+                    return True
+            else:
+                for token in tokens:
+                    if fuzzy_match(token, keyword, threshold=threshold):
+                        return True
+
+    return False
+
+
+BLUE_KEYWORDS = [
+    "blue", "im blue", "i am blue", "da ba dee", "da ba di",
+    "da ba dee da ba di", "eiffel 65", "eiffel sixty five",
+    "blue song", "blue music", "blue guy", "blue dude", "blue man",
+    "blue person", "blue boy", "blue character", "who is blue",
+    "why is he blue", "why is bro blue", "bro is blue", "he is blue",
+    "they are blue", "everyone is blue", "everything is blue",
     "blue everywhere",
 
-    # Misspellings
-    "da ba di da ba die",
-    "dabadi dabadie",
-    "daba dee",
-    "dabadee",
-    "dabadi",
-    "im blu",
-    "i'm blu",
-    "iam blue",
-    "i am blu",
+    "neela", "nila", "neela rang", "main neela hoon", "wo neela hai",
+
+    "azul", "soy azul", "cancion azul", "hombre azul",
+
+    "bleu", "je suis bleu", "chanson bleue",
+
+    "blau", "ich bin blau", "blaues lied",
+
+    "azul cancao", "sou azul",
+
+    "blu", "sono blu",
 ]
+
+ABHINAV_KEYWORDS = [
+    "abhinav", "abhi", "where is abhinav", "show abhinav",
+    "cute abhinav", "cutie abhinav", "look at abhinav",
+    "abhinav is here",
+]
+
+GREETING_KEYWORDS = {
+    "good morning": [
+        "good morning", "gm", "morning",
+        "suprabhat", "shubh prabhat",      # Hindi
+        "buenos dias",                      # Spanish
+        "bonjour",                          # French
+        "guten morgen",                     # German
+        "bom dia",                          # Portuguese
+        "buongiorno",                       # Italian
+    ],
+    "good night": [
+        "good night", "gn", "night night", "nighty night",
+        "shubh ratri",                      # Hindi
+        "buenas noches",                    # Spanish
+        "bonne nuit",                       # French
+        "gute nacht",                       # German
+        "boa noite",                        # Portuguese
+        "buonanotte",                       # Italian
+    ],
+    "hello": [
+        "hello", "hi", "hey", "yo", "sup", "heyy",
+        "namaste", "namaskar",              # Hindi
+        "hola",                             # Spanish
+        "salut",                            # French
+        "hallo",                            # German
+        "ola",                              # Portuguese
+        "ciao",                             # Italian
+    ],
+}
 
 RESPONSES = {
     "good morning": [
@@ -124,16 +181,6 @@ RESPONSES = {
     ]
 }
 
-ABHINAV_TRIGGERS = [
-    "abhinav",
-    "abhi",
-    "abhinav is here",
-    "where is abhinav",
-    "look at abhinav",
-    "show abhinav",
-    "cute abhinav",
-    "cutie abhinav",
-]
 
 FFMPEG_OPTIONS = {
     "before_options": (
@@ -154,6 +201,7 @@ YTDL_OPTIONS = {
 
 BLUE_URL = "https://www.youtube.com/watch?v=68ugkg9RePc"
 
+
 def get_audio_url(url):
     with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
         info = ydl.extract_info(url, download=False)
@@ -162,6 +210,7 @@ def get_audio_url(url):
             info = info["entries"][0]
 
         return info["url"]
+
 
 @bot.event
 async def on_ready():
@@ -174,9 +223,6 @@ async def on_ready():
     except Exception as e:
         print(f"Failed to sync commands: {e}")
 
-# ==========================================
-# /bluegif
-# ==========================================
 
 @bot.tree.command(
     name="bluegif",
@@ -209,16 +255,14 @@ async def bluegif(interaction: discord.Interaction):
         file=file
     )
 
+
 @bot.event
 async def on_presence_update(before, after):
-    # Only trigger when someone goes from offline → online
     if before.status == discord.Status.offline and after.status != discord.Status.offline:
 
-        # Ignore bots
         if after.bot:
             return
 
-        # Find the general channel
         channel = discord.utils.get(
             after.guild.text_channels,
             name="🤗welcome"
@@ -227,7 +271,6 @@ async def on_presence_update(before, after):
         if channel is None:
             return
 
-        # Create the message
         embed = discord.Embed(
             title="👋 HELLO!",
             description=(
@@ -238,13 +281,11 @@ async def on_presence_update(before, after):
             color=discord.Color.blue()
         )
 
-        # Load the GIF
         file = discord.File(
             BLUE_GIF,
             filename="blue.gif"
         )
 
-        # Put GIF inside embed
         embed.set_image(
             url="attachment://blue.gif"
         )
@@ -253,11 +294,11 @@ async def on_presence_update(before, after):
             text="💙 Blue Da Ba Dee"
         )
 
-        # Send message + GIF
         await channel.send(
             embed=embed,
             file=file
         )
+
 
 @bot.tree.command(
     name="showabhinav",
@@ -290,114 +331,89 @@ async def showabhinav(interaction: discord.Interaction):
     )
 
 
-# ==========================================
-# MESSAGE LISTENER
-# ==========================================
 @bot.event
 async def on_message(message):
 
-    # Ignore bots
     if message.author.bot:
         return
 
     user_text = message.content
     username = message.author.display_name
-    channel = getattr(
-        message.channel,
-        "name",
-        "DM"
-    )
+    channel_name = getattr(message.channel, "name", "DM")
 
-    print(f"[{channel}] {username}: {user_text}")
+    print(f"[{channel_name}] {username}: {user_text}")
 
-    text = user_text.lower()
+    stripped = user_text.strip()
+    if stripped and not stripped.startswith(("!", "/")):
 
-    # ==========================================
-    # AUTOMATIC RESPONSES
-    # ==========================================
+        for trigger, keywords in GREETING_KEYWORDS.items():
+            if contains_fuzzy_keyword(user_text, keywords):
+                response = random.choice(RESPONSES[trigger])
+                await message.channel.send(response)
+                break
 
-    for trigger, responses in RESPONSES.items():
+        if contains_fuzzy_keyword(user_text, BLUE_KEYWORDS):
 
-        if trigger in text:
+            embed = discord.Embed(
+                title="💙 BLUE DA BA DEE!",
+                description=(
+                    f"**Blue, {username}!** 🔵\n\n"
+                    "I'm Blue Da Ba Dee!"
+                ),
+                color=discord.Color.blue()
+            )
 
-            response = random.choice(responses)
+            file = discord.File(
+                BLUE_GIF,
+                filename="blue.gif"
+            )
 
-            await message.channel.send(response)
+            embed.set_image(
+                url="attachment://blue.gif"
+            )
 
-            break
+            embed.set_footer(
+                text="💙 Blue Da Ba Dee"
+            )
 
-    # ==========================================
-    # BLUE DETECTION
-    # ==========================================
+            await message.channel.send(
+                embed=embed,
+                file=file
+            )
 
-    if any(trigger in text for trigger in BLUE_TRIGGERS):
+        if contains_fuzzy_keyword(user_text, ABHINAV_KEYWORDS):
 
-        embed = discord.Embed(
-            title="💙 BLUE DA BA DEE!",
-            description=(
-                f"**Blue, {username}!** 🔵\n\n"
-                "I'm Blue Da Ba Dee!"
-            ),
-            color=discord.Color.blue()
-        )
+            embed = discord.Embed(
+                title="🥹💙 THE CUTIE PIE HIMSELF",
+                description=(
+                    "Everyone look‼️\n\n"
+                    "**Abhinav is such a cutie pie!** 🥹💙\n"
+                    "Absolutely adorable. 10/10 cuteness. 😭✨"
+                ),
+                color=discord.Color.blue()
+            )
 
-        file = discord.File(
-            BLUE_GIF,
-            filename="blue.gif"
-        )
+            file = discord.File(
+                ABHINAV_IMAGE,
+                filename="abhinav.png"
+            )
 
-        embed.set_image(
-            url="attachment://blue.gif"
-        )
+            embed.set_image(
+                url="attachment://abhinav.png"
+            )
 
-        embed.set_footer(
-            text="💙 Blue Da Ba Dee"
-        )
+            embed.set_footer(
+                text="Abhinav appreciation department"
+            )
 
-        await message.channel.send(
-            embed=embed,
-            file=file
-        )
+            await message.channel.send(
+                embed=embed,
+                file=file
+            )
 
-    # ==========================================
-    # ABHINAV DETECTION
-    # ==========================================
-
-    if any(trigger in text for trigger in ABHINAV_TRIGGERS):
-
-        embed = discord.Embed(
-            title="🥹💙 THE CUTIE PIE HIMSELF",
-            description=(
-                "Everyone look‼️\n\n"
-                "**Abhinav is such a cutie pie!** 🥹💙\n"
-                "Absolutely adorable. 10/10 cuteness. 😭✨"
-            ),
-            color=discord.Color.blue()
-        )
-
-        file = discord.File(
-            ABHINAV_IMAGE,
-            filename="abhinav.png"
-        )
-
-        embed.set_image(
-            url="attachment://abhinav.png"
-        )
-
-        embed.set_footer(
-            text="Abhinav appreciation department"
-        )
-
-        await message.channel.send(
-            embed=embed,
-            file=file
-        )
-
-    # ==========================================
-    # KEEP COMMANDS WORKING
-    # ==========================================
 
     await bot.process_commands(message)
+
 
 @bot.tree.command(
     name="playblue",
@@ -417,7 +433,6 @@ async def playblue(interaction: discord.Interaction):
 
     try:
 
-        # Get or create voice connection
         voice_client = interaction.guild.voice_client
 
         if voice_client is None:
@@ -426,13 +441,11 @@ async def playblue(interaction: discord.Interaction):
         elif voice_client.channel != channel:
             await voice_client.move_to(channel)
 
-        # Stop existing audio
         if voice_client.is_playing():
             voice_client.stop()
 
         print("Getting audio URL...")
 
-        # yt-dlp can take a little while
         audio_url = await asyncio.to_thread(
             get_audio_url,
             BLUE_URL
@@ -472,6 +485,7 @@ async def playblue(interaction: discord.Interaction):
             f"❌ Music failed:\n`{e}`"
         )
 
+
 @bot.tree.command(
     name="stop",
     description="Stop the current music"
@@ -492,6 +506,7 @@ async def stop(interaction: discord.Interaction):
     await interaction.response.send_message(
         "⏹️ **Blue has been stopped.**"
     )
+
 
 @bot.tree.command(
     name="pause",
@@ -515,6 +530,7 @@ async def pause(interaction: discord.Interaction):
             "❌ Nothing is playing."
         )
 
+
 @bot.tree.command(
     name="resume",
     description="Resume the music"
@@ -537,6 +553,7 @@ async def resume(interaction: discord.Interaction):
             "❌ Nothing is paused."
         )
 
+
 @bot.tree.command(
     name="leave",
     description="Make the bot leave the voice channel"
@@ -556,5 +573,6 @@ async def leave(interaction: discord.Interaction):
     await interaction.response.send_message(
         "👋 Left the voice channel."
     )
+
 
 bot.run(TOKEN)
